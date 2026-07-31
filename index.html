@@ -26,7 +26,8 @@
   <main>
     <header class="hero"><h1>🌱 myKid</h1><p id="heroText">A private family dashboard for goals, school time, and birthday memories.</p></header>
     <section class="card purchase"><div><h2>myKid Family Access</h2><p class="muted">$100 CAD, one-time lifetime access per family · Unlimited child profiles</p></div><a class="pay" href="https://buy.stripe.com/bJeaEX3iEa9K4hJ7EXgIo03" target="_blank" rel="noopener">Get lifetime access — $100</a></section>
-    <div class="notice"><b>Preview version:</b> payment is handled by Stripe, but this GitHub page is still a browser-only preview. Do not enter real financial or private child information until the secure Supabase release is connected.</div>
+    <div class="notice"><b>Secure family account:</b> Create an account or sign in below before saving private family information to the cloud. Your browser keeps a local copy as you work.</div>
+    <section class="card" id="authPanel" style="margin-bottom:16px"><h2 style="margin-bottom:8px">Family sign-in</h2><p class="muted" id="authStatus">Sign in to save this family's data securely.</p><div class="form-grid"><div><label for="authEmail">Email</label><input id="authEmail" type="email" autocomplete="email" placeholder="parent@example.com"></div><div><label for="authPassword">Password</label><input id="authPassword" type="password" autocomplete="current-password" placeholder="At least 6 characters"></div></div><p><button class="primary" id="signUp">Create family account</button> <button id="signIn">Sign in</button> <button id="signOut" style="display:none">Sign out</button></p><p id="cloudActions" style="display:none"><button class="primary" id="saveCloud">Save securely to Supabase</button> <button id="loadCloud">Load from Supabase</button></p></section>
     <section class="card" style="margin-bottom:16px"><h2 style="margin-bottom:8px">Family profile</h2><p class="muted">After secure payment confirmation, one family profile can add any number of child profiles.</p><div class="form-grid"><div><label for="parentName">Parent or family name</label><input id="parentName" value=""></div><div><label for="parentEmail">Parent email</label><input id="parentEmail" type="email" placeholder="parent@example.com"></div><div class="card" style="background:#edf4ee"><div class="muted">Preview status</div><b>Lifetime family access · $100</b><br><span class="muted">Secure payment unlock is coming with Supabase.</span></div></div></section>
     <section class="card" style="margin-bottom:16px"><h2 style="margin-bottom:8px">Child profiles</h2><p class="muted">Choose a child to open their own myKid page. Each profile has separate goals, school hours, and birthday card in this browser.</p><div class="form-grid"><div><label for="profileSelect">Open child profile</label><select id="profileSelect"></select></div><div style="display:flex;align-items:end"><button class="primary" id="addChild">Add another child</button></div></div></section>
     <nav>
@@ -52,8 +53,14 @@
 
     <section id="card" class="tab"><h2>Annual birthday card</h2><div class="form-grid"><div class="card"><label for="message">Parent message</label><textarea id="message">Happy birthday, Ava! We are proud of your kindness, curiosity, and hard work this year.</textarea><label for="memory">Favourite memory from this year</label><input id="memory" value="Our family picnic at the park"><p><button class="primary" id="updateCard">Update card</button></p></div><div class="birthday"><div style="font-size:2rem">🎈 🎂 🌟</div><h2 id="cardHeading">Happy Birthday!</h2><p id="cardMessage"></p><p><b>Favourite memory:</b> <span id="cardMemory"></span></p><p style="margin-top:2rem">With love, your family</p></div></div></section>
   </main>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     const $ = id => document.getElementById(id);
+    const supabaseClient = window.supabase.createClient(
+      'https://xbdlzzjparnvrsvsjfca.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhiZGx6empwYXJudnJzdnNqZmNhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MzQ0NDYsImV4cCI6MjA5MzUxMDQ0Nn0.h0AxxjVJZWpTCkywH-Et30TCn4nKQwGXfvmPbVmgZJo'
+    );
+    let signedInUser = null;
     const today = new Date(), todayISO = today.toISOString().slice(0,10);
     const fmt = n => new Intl.NumberFormat('en-CA',{style:'currency',currency:'CAD',maximumFractionDigits:0}).format(n);
     const careerIdeas = [
@@ -102,9 +109,70 @@
     $('addChild').onclick=()=>{const name=prompt('Child name'); if(name&&name.trim()){const p=makeProfile(name.trim()); profiles.push(p); activeId=p.id; loadProfile(); render();}};
     $('addContribution').onclick=()=>{const n=Number($('amount').value); if(!n||n<=0)return; const g=active().goals[$('goalSelect').value]; g[$('who').value==='parent'?'parentSaved':'kidSaved']+=n; $('amount').value=''; render();};
     $('addHours').onclick=()=>{const child=Number($('childHoursToday').value),parent=Number($('parentHoursToday').value); if(child>0||parent>0){active().childHours+=child;active().parentHours+=parent;$('childHoursToday').value=0;$('parentHoursToday').value=0;render();}};
+    async function setSignedInUser(user){
+      signedInUser=user || null;
+      $('signOut').style.display=signedInUser?'inline-block':'none';
+      $('cloudActions').style.display=signedInUser?'block':'none';
+      $('authEmail').disabled=!!signedInUser; $('authPassword').disabled=!!signedInUser;
+      $('signUp').style.display=signedInUser?'none':'inline-block'; $('signIn').style.display=signedInUser?'none':'inline-block';
+      $('authStatus').textContent=signedInUser ? `Signed in as ${signedInUser.email}. Your private cloud controls are ready.` : 'Sign in to save this family\'s data securely.';
+    }
+    async function saveToCloud(){
+      if(!signedInUser) return;
+      saveProfileFromForm();
+      $('authStatus').textContent='Saving securely...';
+      const familyResult=await supabaseClient.from('myKidFamilies').upsert({owner_id:signedInUser.id,family_name:family.name},{onConflict:'owner_id'}).select().single();
+      if(familyResult.error){$('authStatus').textContent='Could not save family: '+familyResult.error.message;return;}
+      for(const profile of profiles){
+        let childResult;
+        const childData={family_id:familyResult.data.id,child_name:profile.name,birth_date:profile.birthday||null,signup_date:profile.signup||todayISO};
+        if(profile.remoteId) childResult=await supabaseClient.from('myKidChildren').update(childData).eq('id',profile.remoteId).select().single();
+        else childResult=await supabaseClient.from('myKidChildren').insert(childData).select().single();
+        if(childResult.error){$('authStatus').textContent='Could not save child profile: '+childResult.error.message;return;}
+        profile.remoteId=childResult.data.id;
+        await supabaseClient.from('myKidGoals').delete().eq('child_id',profile.remoteId);
+        const goals=profile.goals.map(g=>({child_id:profile.remoteId,goal_name:g.name,target_age:g.age,parent_target:g.parent,child_target:g.kid,parent_saved:g.parentSaved,child_saved:g.kidSaved,notes:g.note}));
+        const goalResult=await supabaseClient.from('myKidGoals').insert(goals);
+        if(goalResult.error){$('authStatus').textContent='Could not save goals: '+goalResult.error.message;return;}
+        await supabaseClient.from('myKidStudyHours').delete().eq('child_id',profile.remoteId);
+        const studyResult=await supabaseClient.from('myKidStudyHours').insert({child_id:profile.remoteId,entry_date:todayISO,subject:'Weekly total',child_hours:profile.childHours,parent_help_hours:profile.parentHours});
+        if(studyResult.error){$('authStatus').textContent='Could not save study hours: '+studyResult.error.message;return;}
+        const cardResult=await supabaseClient.from('myKidBirthdayCards').upsert({child_id:profile.remoteId,card_year:today.getFullYear(),parent_message:profile.message,favourite_memory:profile.memory},{onConflict:'child_id,card_year'});
+        if(cardResult.error){$('authStatus').textContent='Could not save birthday card: '+cardResult.error.message;return;}
+      }
+      save(); $('authStatus').textContent='Saved securely to Supabase.';
+    }
+    async function loadFromCloud(){
+      if(!signedInUser) return;
+      $('authStatus').textContent='Loading your family data...';
+      const familyResult=await supabaseClient.from('myKidFamilies').select('*').eq('owner_id',signedInUser.id).maybeSingle();
+      if(familyResult.error){$('authStatus').textContent='Could not load family: '+familyResult.error.message;return;}
+      if(!familyResult.data){$('authStatus').textContent='No cloud family data yet. Add a child, then choose Save securely to Supabase.';return;}
+      family.name=familyResult.data.family_name||'';
+      const childrenResult=await supabaseClient.from('myKidChildren').select('*').eq('family_id',familyResult.data.id).order('created_at');
+      if(childrenResult.error){$('authStatus').textContent='Could not load children: '+childrenResult.error.message;return;}
+      const loaded=[];
+      for(const child of childrenResult.data){
+        const [goalsResult,studyResult,cardsResult]=await Promise.all([
+          supabaseClient.from('myKidGoals').select('*').eq('child_id',child.id),
+          supabaseClient.from('myKidStudyHours').select('*').eq('child_id',child.id),
+          supabaseClient.from('myKidBirthdayCards').select('*').eq('child_id',child.id).order('card_year',{ascending:false}).limit(1)
+        ]);
+        const goals=(goalsResult.data||[]).map(g=>({name:g.goal_name,age:g.target_age,parent:Number(g.parent_target),kid:Number(g.child_target),parentSaved:Number(g.parent_saved),kidSaved:Number(g.child_saved),note:g.notes||''}));
+        const hours=(studyResult.data||[]).reduce((total,row)=>({child:total.child+Number(row.child_hours),parent:total.parent+Number(row.parent_help_hours)}),{child:0,parent:0});
+        const card=(cardsResult.data||[])[0];
+        loaded.push({id:child.id,remoteId:child.id,name:child.child_name,birthday:child.birth_date||'2018-04-10',signup:child.signup_date||todayISO,goals:goals.length?goals:goalTemplate(),childHours:hours.child,parentHours:hours.parent,message:card?.parent_message||`Happy birthday, ${child.child_name}!`,memory:card?.favourite_memory||''});
+      }
+      if(loaded.length){profiles=loaded;activeId=profiles[0].id;loadProfile();render();}
+      $('authStatus').textContent='Loaded your private family data from Supabase.';
+    }
+    $('signUp').onclick=async()=>{const email=$('authEmail').value.trim(),password=$('authPassword').value;if(!email||password.length<6){$('authStatus').textContent='Enter an email and a password with at least 6 characters.';return;}const result=await supabaseClient.auth.signUp({email,password,options:{emailRedirectTo:'https://mina2019.github.io/myKid/'}});if(result.error){$('authStatus').textContent=result.error.message;return;}if(result.data.session) await setSignedInUser(result.data.user); else $('authStatus').textContent='Check your email to confirm your account, then sign in.';};
+    $('signIn').onclick=async()=>{const result=await supabaseClient.auth.signInWithPassword({email:$('authEmail').value.trim(),password:$('authPassword').value});if(result.error){$('authStatus').textContent=result.error.message;return;}await setSignedInUser(result.data.user);await loadFromCloud();};
+    $('signOut').onclick=async()=>{await supabaseClient.auth.signOut();await setSignedInUser(null);};
+    $('saveCloud').onclick=saveToCloud; $('loadCloud').onclick=loadFromCloud;
     $('resetHours').onclick=()=>{active().childHours=0;active().parentHours=0;render();}; $('updateCard').onclick=render;
     $('pickCareer').onclick=()=>{const idea=careerIdeas[Math.floor(Math.random()*careerIdeas.length)]; $('careerResult').textContent=idea[0]; $('careerNote').textContent=idea[1]+' Talk about whether it sounds enjoyable, then pick again any time.';};
-    loadProfile(); render();
+    loadProfile(); render(); supabaseClient.auth.getSession().then(({data})=>setSignedInUser(data.session?.user));
   </script>
 </body>
 </html>
