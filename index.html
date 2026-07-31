@@ -30,7 +30,7 @@
     <section class="card" style="margin-bottom:16px"><h2 style="margin-bottom:8px">Family profile</h2><p class="muted">After secure payment confirmation, one family profile can add any number of child profiles.</p><div class="form-grid"><div><label for="parentName">Parent or family name</label><input id="parentName" value=""></div><div><label for="parentEmail">Parent email</label><input id="parentEmail" type="email" placeholder="parent@example.com"></div><div class="card" style="background:#edf4ee"><div class="muted">Preview status</div><b>Lifetime family access · $100</b><br><span class="muted">Secure payment unlock is coming with Supabase.</span></div></div></section>
     <section class="card" style="margin-bottom:16px"><h2 style="margin-bottom:8px">Child profiles</h2><p class="muted">Choose a child to open their own myKid page. Each profile has separate goals, school hours, and birthday card in this browser.</p><div class="form-grid"><div><label for="profileSelect">Open child profile</label><select id="profileSelect"></select></div><div style="display:flex;align-items:end"><button class="primary" id="addChild">Add another child</button></div></div></section>
     <nav>
-      <button class="active" data-tab="overview">Overview</button><button data-tab="goals">Goals & support</button><button data-tab="school">School time</button><button data-tab="card">Birthday card</button>
+      <button class="active" data-tab="overview">Overview</button><button data-tab="goals">Goals & support</button><button data-tab="career">Industry explorer</button><button data-tab="school">School time</button><button data-tab="card">Birthday card</button>
     </nav>
 
     <section id="overview" class="tab active">
@@ -38,6 +38,8 @@
       <div class="grid"><div class="card"><div class="muted">Family goal</div><div class="metric" id="familyGoal"></div></div><div class="card"><div class="muted">Saved so far</div><div class="metric" id="saved"></div></div><div class="card"><div class="muted">Parent commitment</div><div class="metric" id="parentCommitment"></div></div><div class="card"><div class="muted">Kid commitment</div><div class="metric" id="kidCommitment"></div></div></div>
       <div class="card" style="margin-top:14px"><h2>Next family moments</h2><p id="birthdayMoment"></p><p><b>📚 School support:</b> Set a weekly number of hours spent studying together.</p><p><b>🌟 Decade postcard:</b> At age 10, make a private time-capsule postcard with favourite memories.</p></div>
     </section>
+
+    <section id="career" class="tab"><h2>Industry Explorer</h2><p>Pick a broad NAICS industry at random, then explore the careers and businesses inside it. It is a conversation starter, not a prediction or a decision.</p><div class="card" style="max-width:680px"><button class="primary" id="pickCareer">Pick a random industry</button><div id="careerResult" class="metric" style="margin-top:16px">Ready when you are.</div><p id="careerNote" class="muted">Try one, discuss what sounds interesting, then pick again any time.</p></div></section>
 
     <section id="goals" class="tab">
       <h2>Assistance by parents and shared responsibility</h2>
@@ -54,6 +56,23 @@
     const $ = id => document.getElementById(id);
     const today = new Date(), todayISO = today.toISOString().slice(0,10);
     const fmt = n => new Intl.NumberFormat('en-CA',{style:'currency',currency:'CAD',maximumFractionDigits:0}).format(n);
+    const careerIdeas = [
+      ['NAICS 11 — Agriculture, forestry, fishing and hunting','Food, farming, forests, wildlife, and resource stewardship.'],
+      ['NAICS 21 — Mining, quarrying, and oil and gas extraction','Natural resources, earth science, operations, and safety.'],
+      ['NAICS 22 — Utilities','Electricity, water, natural gas, and essential infrastructure.'],
+      ['NAICS 23 — Construction','Buildings, roads, trades, project management, and design.'],
+      ['NAICS 31–33 — Manufacturing','Making products through engineering, technology, quality, and operations.'],
+      ['NAICS 44–45 — Retail trade','Stores, e-commerce, customer experience, and product buying.'],
+      ['NAICS 48–49 — Transportation and warehousing','Moving people and goods, logistics, transit, aviation, and supply chains.'],
+      ['NAICS 51 — Information and cultural industries','Software, media, publishing, data, and digital services.'],
+      ['NAICS 52 — Finance and insurance','Banking, investing, financial planning, and risk protection.'],
+      ['NAICS 54 — Professional, scientific and technical services','Engineering, science, design, law, accounting, and consulting.'],
+      ['NAICS 61 — Educational services','Teaching, learning design, tutoring, and school leadership.'],
+      ['NAICS 62 — Health care and social assistance','Health, mental wellness, care, and community support.'],
+      ['NAICS 71 — Arts, entertainment and recreation','Creative work, sport, events, games, and cultural experiences.'],
+      ['NAICS 72 — Accommodation and food services','Hotels, travel experiences, restaurants, and food.'],
+      ['NAICS 91 — Public administration','Public services, policy, emergency services, and community programs.']
+    ];
     const goalTemplate = () => [
       {name:'College fund',age:18,parent:30000,kid:0,parentSaved:7200,kidSaved:0,note:'Education support'},
       {name:'First car fund',age:18,parent:5000,kid:0,parentSaved:1200,kidSaved:0,note:'First car or transit choice'},
@@ -83,7 +102,9 @@
     $('addChild').onclick=()=>{const name=prompt('Child name'); if(name&&name.trim()){const p=makeProfile(name.trim()); profiles.push(p); activeId=p.id; loadProfile(); render();}};
     $('addContribution').onclick=()=>{const n=Number($('amount').value); if(!n||n<=0)return; const g=active().goals[$('goalSelect').value]; g[$('who').value==='parent'?'parentSaved':'kidSaved']+=n; $('amount').value=''; render();};
     $('addHours').onclick=()=>{const child=Number($('childHoursToday').value),parent=Number($('parentHoursToday').value); if(child>0||parent>0){active().childHours+=child;active().parentHours+=parent;$('childHoursToday').value=0;$('parentHoursToday').value=0;render();}};
-    $('resetHours').onclick=()=>{active().childHours=0;active().parentHours=0;render();}; $('updateCard').onclick=render; loadProfile(); render();
+    $('resetHours').onclick=()=>{active().childHours=0;active().parentHours=0;render();}; $('updateCard').onclick=render;
+    $('pickCareer').onclick=()=>{const idea=careerIdeas[Math.floor(Math.random()*careerIdeas.length)]; $('careerResult').textContent=idea[0]; $('careerNote').textContent=idea[1]+' Talk about whether it sounds enjoyable, then pick again any time.';};
+    loadProfile(); render();
   </script>
 </body>
 </html>
